@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Оформление подписки - KinoStream</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .sub-wrapper {
+            max-width: 750px;
+            margin: 50px auto;
+            padding: 0 20px;
+        }
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin: 25px 0;
+        }
+        .plan-card {
+            background-color: #212121;
+            border: 2px solid #333;
+            border-radius: 10px;
+            padding: 25px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+        }
+        .plan-card:hover {
+            transform: translateY(-4px);
+            border-color: #666;
+        }
+        .plan-card.selected {
+            border-color: #e50914;
+            background-color: #291617;
+            box-shadow: 0 0 20px rgba(229, 9, 20, 0.25);
+        }
+        .plan-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .plan-price {
+            font-size: 32px;
+            font-weight: bold;
+            color: #f3ce13;
+            margin-bottom: 8px;
+        }
+        .plan-desc {
+            font-size: 13px;
+            color: #999;
+        }
+        .badge-popular {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #e50914;
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 3px 10px;
+            border-radius: 10px;
+        }
+        .payment-card-box {
+            max-width: 420px;
+            margin: 0 auto;
+            background-color: #212121;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #333;
+            display: none; /* Скрыто на первом шаге */
+        }
+        .row-inputs {
+            display: flex;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body class="auth-body">
+
+<div class="header">
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+    <div class="nav-menu">
+        <a href="/">Фильмы</a>
+        <a href="/">Сериалы</a>
+        <a href="/bookmarks">Мои закладки</a>
+    </div>
+    <div class="auth-buttons" id="authSection">
+        <a href="/profile" class="btn-login" style="background-color: #333;">Назад в профиль</a>
+    </div>
+</div>
+
+<div class="sub-wrapper">
+    <!-- ШАГ 1: ВЫБОР ТАРИФА -->
+    <div id="step1Plans">
+        <h2 style="text-align: center; font-size: 28px; margin-bottom: 10px;">Выберите период подписки</h2>
+        <p style="text-align: center; color: #888; margin-top: 0;">Откройте доступ к Full HD 1080p на всех фильмах и сериалах</p>
+
+        <div class="plans-grid">
+            <!-- 1 месяц -->
+            <div class="plan-card selected" onclick="selectPlan(1, 2, this)">
+                <div class="plan-title">1 месяц</div>
+                <div class="plan-price">2$</div>
+                <div class="plan-desc">Базовый доступ на 30 дней</div>
+            </div>
+
+            <!-- 3 месяца -->
+            <div class="plan-card" onclick="selectPlan(3, 3, this)">
+                <div class="badge-popular">ВЫГОДНО</div>
+                <div class="plan-title">3 месяца</div>
+                <div class="plan-price">3$</div>
+                <div class="plan-desc">Всего 1$ в месяц (90 дней)</div>
+            </div>
+
+            <!-- 6 месяцев -->
+            <div class="plan-card" onclick="selectPlan(6, 5, this)">
+                <div class="badge-popular" style="background-color: #f3ce13; color: #000;">МАКСИМУМ</div>
+                <div class="plan-title">6 месяцев</div>
+                <div class="plan-price">5$</div>
+                <div class="plan-desc">Полгода премиума (180 дней)</div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button class="btn-submit" style="max-width: 280px;" onclick="goToPaymentStep()">Далее →</button>
+        </div>
+    </div>
+
+    <!-- ШАГ 2: ВВОД ДАННЫХ КАРТЫ -->
+    <div id="step2Payment" class="payment-card-box">
+        <h2 style="margin-top: 0; margin-bottom: 10px;">Оплата подписки</h2>
+        <p id="selectedPlanSummary" style="color: #f3ce13; font-weight: bold; margin-bottom: 20px;">
+            Тариф: 1 месяц (к оплате 2$)
+        </p>
+
+        <label style="color: #aaa; font-size: 13px; display: block; margin-bottom: 5px;">Номер карты</label>
+        <input type="text" id="cardNumber" class="auth-input" placeholder="0000 0000 0000 0000" maxlength="19">
+
+        <label style="color: #aaa; font-size: 13px; display: block; margin-bottom: 5px;">Имя и фамилия владельца</label>
+        <input type="text" id="cardHolder" class="auth-input" placeholder="IVAN IVANOV">
+
+        <div class="row-inputs">
+            <div style="flex: 1;">
+                <label style="color: #aaa; font-size: 13px; display: block; margin-bottom: 5px;">Срок (ММ/ГГ)</label>
+                <input type="text" id="cardExpiry" class="auth-input" placeholder="12/28" maxlength="5">
+            </div>
+            <div style="flex: 1;">
+                <label style="color: #aaa; font-size: 13px; display: block; margin-bottom: 5px;">CVC / CVV</label>
+                <input type="password" id="cardCvc" class="auth-input" placeholder="***" maxlength="4">
+            </div>
+        </div>
+
+        <button class="btn-submit" onclick="processPayment()" style="margin-top: 10px;">Оплатить и активировать</button>
+        <button class="btn-submit btn-register" onclick="backToPlans()" style="margin-top: 10px;">← Изменить тариф</button>
+
+        <div id="paymentMsg" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
+    </div>
+</div>
+
+<script>
+    let chosenMonths = 1;
+    let chosenPrice = 2;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const email = localStorage.getItem('userEmail');
+        if (!email) {
+            window.location.href = '/login';
+        }
+    });
+
+    function selectPlan(months, price, cardEl) {
+        chosenMonths = months;
+        chosenPrice = price;
+        document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+        cardEl.classList.add('selected');
+    }
+
+    function goToPaymentStep() {
+        document.getElementById('step1Plans').style.display = 'none';
+        document.getElementById('step2Payment').style.display = 'block';
+        document.getElementById('selectedPlanSummary').textContent = `Тариф: ${chosenMonths} мес. (к оплате ${chosenPrice}$)`;
+    }
+
+    function backToPlans() {
+        document.getElementById('step2Payment').style.display = 'none';
+        document.getElementById('step1Plans').style.display = 'block';
+    }
+
+    async function processPayment() {
+        const email = localStorage.getItem('userEmail');
+        const cardNumber = document.getElementById('cardNumber').value.trim();
+        const cardHolder = document.getElementById('cardHolder').value.trim();
+        const cardExpiry = document.getElementById('cardExpiry').value.trim();
+        const cardCvc = document.getElementById('cardCvc').value.trim();
+        const msgBox = document.getElementById('paymentMsg');
+
+        // Проверяем только то, что поля не пустые
+        if (!cardNumber || !cardHolder || !cardExpiry || !cardCvc) {
+            msgBox.style.color = '#ff4d4d';
+            msgBox.textContent = 'Пожалуйста, заполните все поля карты!';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/profile/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    months: String(chosenMonths)
+                })
+            });
+
+            if (response.ok) {
+                msgBox.style.color = '#4caf50';
+                msgBox.textContent = '✓ Оплата прошла успешно! Перенаправляем в профиль...';
+                setTimeout(() => {
+                    window.location.href = '/profile';
+                }, 1200);
+            } else {
+                const err = await response.text();
+                msgBox.style.color = '#ff4d4d';
+                msgBox.textContent = 'Ошибка: ' + err;
+            }
+        } catch (err) {
+            msgBox.style.color = '#ff4d4d';
+            msgBox.textContent = 'Ошибка соединения с сервером';
+        }
+    }
+</script>
+</body>
+</html>

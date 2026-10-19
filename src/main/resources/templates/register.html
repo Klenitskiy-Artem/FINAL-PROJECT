@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>KinoStream - Регистрация</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="auth-body">
+<div class="header">
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+    <div class="auth-buttons">
+        <a href="/login" class="btn-login" style="background-color: #333;">Уже есть аккаунт? Войти</a>
+    </div>
+</div>
+
+<div class="auth-container" style="align-items: center;">
+    <div class="auth-box">
+        <h2>Новый пользователь</h2>
+        <form id="registerForm">
+            <input type="email" id="regEmail" placeholder="Email" required class="auth-input">
+            <!-- ДОБАВЛЕН id="regUsername" -->
+            <input type="text" id="regUsername" name="username" placeholder="Имя пользователя" required style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #333; background: #222; color: white;">
+            <input type="password" id="regPassword" placeholder="Пароль" required class="auth-input">
+            <button type="submit" class="btn-submit btn-register">Зарегистрироваться</button>
+        </form>
+        <div id="messageBox" class="message-box" style="position: relative; bottom: 0; margin-top: 15px;"></div>
+    </div>
+</div>
+
+<script>
+    function showMessage(text, isError = false) {
+        const msgBox = document.getElementById('messageBox');
+        msgBox.textContent = text;
+        msgBox.style.color = isError ? '#ff4d4d' : '#4caf50';
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Исправлено: получаем значения по правильным ID
+        const email = document.getElementById('regEmail').value;
+        const username = document.getElementById('regUsername').value;
+        const password = document.getElementById('regPassword').value;
+
+        try {
+            // Оставлен только ОДИН запрос, который передает все три параметра
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email, username: username, password: password })
+            });
+
+            const text = await response.text();
+            if (response.ok) {
+                showMessage(text + " Теперь вы можете войти.", false);
+                setTimeout(() => window.location.href = '/login', 2000);
+            } else {
+                showMessage(text, true);
+            }
+        } catch (err) {
+            showMessage('Ошибка соединения с сервером', true);
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мой профиль - KinoStream</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Контейнер в две колонки строго по горизонтали */
+        .profile-layout {
+            max-width: 960px;
+            width: 100%;
+            margin: 50px auto;
+            padding: 0 20px;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 30px;
+            box-sizing: border-box;
+        }
+
+        /* Левая карточка: настройки профиля */
+        .settings-card {
+            flex: 1 1 480px;
+            max-width: 480px;
+            background: #1e1e1e;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+
+        /* Правая карточка: компактный кликабельный блок подписки */
+        .subscription-side-card {
+            width: 340px;
+            flex-shrink: 0;
+            background: #1e1e1e;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            border: 1px solid #2e2e2e;
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .subscription-side-card:hover {
+            transform: translateY(-3px);
+            border-color: #e50914;
+        }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #ccc; font-size: 14px; }
+        .form-group input { width: 100%; padding: 10px 12px; border-radius: 4px; border: 1px solid #333; background: #222; color: white; box-sizing: border-box; }
+        .form-group input:focus { outline: none; border-color: #e50914; }
+        .btn-save { background-color: #e50914; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px; transition: 0.2s; }
+        .btn-save:hover { background-color: #f6121d; }
+    </style>
+</head>
+<body class="auth-body">
+
+<div class="header">
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+    <div class="nav-menu">
+        <a href="/?category=Фильм">Фильмы</a>
+        <a href="/?category=Сериал">Сериалы</a>
+        <a href="/bookmarks">Мои закладки</a>
+    </div>
+    <div class="auth-buttons" id="authSection"></div>
+</div>
+
+<div class="profile-layout">
+    <!-- ЛЕВАЯ КОЛОНКА: Настройки профиля -->
+    <div class="settings-card">
+        <h2 style="margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 12px;">Настройки профиля</h2>
+
+        <div class="form-group">
+            <label>Ваш Email (нельзя изменить)</label>
+            <input type="text" id="profileEmail" disabled style="color: #888; cursor: not-allowed;">
+        </div>
+
+        <form id="updateProfileForm">
+            <div class="form-group">
+                <label>Имя пользователя</label>
+                <input type="text" id="profileUsername" required>
+            </div>
+
+            <div class="form-group">
+                <label>Текущий пароль</label>
+                <input type="password" id="profileOldPassword" placeholder="Введите текущий пароль">
+            </div>
+
+            <div class="form-group">
+                <label>Новый пароль</label>
+                <input type="password" id="profileNewPassword" placeholder="Введите новый пароль">
+            </div>
+
+            <button type="submit" class="btn-save">Сохранить изменения</button>
+        </form>
+        <p id="profileMessage" style="margin-top: 15px; font-weight: bold; text-align: center;"></p>
+    </div>
+
+    <!-- ПРАВАЯ КОЛОНКА: Статус подписки и переход к покупке/продлению -->
+    <div class="subscription-side-card" onclick="window.location.href='/subscription'">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 15px;">
+            <h2 style="margin: 0; font-size: 20px;">Подписка</h2>
+            <span id="subBadge" style="background-color: #333; color: #aaa; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">
+                ЗАГРУЗКА...
+            </span>
+        </div>
+
+        <p id="subDaysLeft" style="color: #ccc; font-size: 15px; line-height: 1.5; margin: 0 0 20px 0;">
+            Проверяем статус...
+        </p>
+
+        <button type="button" class="btn-save">
+            Купить / Продлить подписку →
+        </button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const email = localStorage.getItem('userEmail');
+        if (!email) {
+            window.location.href = '/login';
+            return;
+        }
+
+        document.getElementById('authSection').innerHTML = `
+            <span id="headerUsername" style="color: #ccc; margin-right: 15px; font-weight: bold;">${email}</span>
+            <a href="#" onclick="logout()" class="btn-login" style="background-color: #333;">Выйти</a>
+        `;
+
+        // Запрашиваем данные профиля и статус подписки
+        fetch(`/api/profile?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('profileEmail').value = data.email;
+                document.getElementById('profileUsername').value = data.username;
+                document.getElementById('headerUsername').textContent = data.username;
+
+                const subBadge = document.getElementById('subBadge');
+                const subDaysLeft = document.getElementById('subDaysLeft');
+
+                if (data.subStatus === 'PREMIUM') {
+                    subBadge.textContent = `PRO: осталось ${data.daysLeft} дн.`;
+                    subBadge.style.backgroundColor = '#f3ce13';
+                    subBadge.style.color = '#000';
+                    subDaysLeft.innerHTML = `Статус: <strong style="color: #f3ce13;">Активна (Full HD 1080p)</strong><br><span style="color: #888; font-size: 13px;">Нажмите, чтобы продлить подписку</span>`;
+                } else if (data.subStatus === 'TRIAL') {
+                    subBadge.textContent = `TRIAL: осталось ${data.daysLeft} дн.`;
+                    subBadge.style.backgroundColor = '#4caf50';
+                    subBadge.style.color = '#fff';
+                    subDaysLeft.innerHTML = `Статус: <strong style="color: #4caf50;">Пробный период (3 дня)</strong><br><span style="color: #888; font-size: 13px;">Нажмите, чтобы купить полную подписку</span>`;
+                } else {
+                    subBadge.textContent = 'FREE (480p)';
+                    subBadge.style.backgroundColor = '#333';
+                    subBadge.style.color = '#aaa';
+                    subDaysLeft.innerHTML = `Статус: <strong style="color: #aaa;">Подписка не активна</strong><br><span style="color: #888; font-size: 13px;">Нажмите, чтобы выбрать тариф</span>`;
+                }
+            });
+    });
+
+    function logout() {
+        localStorage.removeItem('userEmail');
+        window.location.href = '/';
+    }
+
+    document.getElementById('updateProfileForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const messageBox = document.getElementById('profileMessage');
+        const email = document.getElementById('profileEmail').value;
+        const newUsername = document.getElementById('profileUsername').value;
+        const oldPassword = document.getElementById('profileOldPassword').value;
+        const newPassword = document.getElementById('profileNewPassword').value;
+
+        try {
+            const response = await fetch('/api/profile/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    username: newUsername,
+                    oldPassword: oldPassword,
+                    newPassword: newPassword
+                })
+            });
+
+            if (response.ok) {
+                messageBox.style.color = '#4caf50';
+                messageBox.textContent = 'Профиль успешно обновлен!';
+                document.getElementById('headerUsername').textContent = newUsername;
+                document.getElementById('profileOldPassword').value = '';
+                document.getElementById('profileNewPassword').value = '';
+            } else {
+                const errorText = await response.text();
+                messageBox.style.color = '#ff4d4d';
+                messageBox.textContent = errorText;
+            }
+        } catch (err) {
+            messageBox.style.color = '#ff4d4d';
+            messageBox.textContent = 'Сбой сети';
+        }
+    });
+</script>
+</body>
+</html>

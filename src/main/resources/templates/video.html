@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${video.title} + ' - KinoStream'">KinoStream</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .movie-details-card { display: flex; gap: 30px; background-color: #1e1e1e; padding: 20px; border-radius: 8px; margin-top: 20px; }
+        .movie-poster { width: 250px; height: 380px; object-fit: cover; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .movie-info { flex-grow: 1; }
+        .movie-info h1 { margin-top: 0; font-size: 28px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .info-list { list-style: none; padding: 0; line-height: 2; font-size: 16px; }
+        .info-list span.label { color: #888; display: inline-block; width: 140px; font-weight: bold; }
+        .info-list span.value { color: #ddd; }
+
+        .player-section { margin-top: 30px; background-color: #111; border-radius: 8px; overflow: hidden; border: 1px solid #333; }
+        .player-tabs { display: flex; background-color: #222; }
+        .player-tab { padding: 15px 30px; background-color: #222; color: #ccc; font-weight: bold; border-right: 1px solid #333; cursor: pointer; }
+        .player-tab.active { background-color: #111; color: white; border-top: 3px solid #e50914; }
+
+        /* Стили контейнера плеера */
+        .video-container { position: relative; width: 100%; aspect-ratio: 16/9; background-color: #000; }
+        video { width: 100%; height: 100%; outline: none; }
+
+        /* Большое меню качества (до начала просмотра) */
+        .quality-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+        .quality-buttons { display: flex; gap: 15px; }
+        .btn-quality { background-color: #333; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-quality:hover { background-color: #e50914; }
+
+        /* Маленькое меню качества внутри плеера */
+        .in-player-controls {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px;
+            border-radius: 6px;
+            display: none;
+            gap: 8px;
+            z-index: 5;
+            transition: opacity 0.3s;
+        }
+        .video-container:not(:hover) .in-player-controls { opacity: 0; }
+
+        .btn-small-quality { background-color: #444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
+        .btn-small-quality.active { background-color: #e50914; }
+        .btn-small-quality:hover:not(.active) { background-color: #666; }
+
+        .bookmark-btn { margin-top: 15px; padding: 10px 20px; background-color: #333; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; display: none; transition: 0.3s; }
+        .bookmark-btn:hover { background-color: #555; }
+
+        /* СТИЛИ ДЛЯ РЕЙТИНГА СО ЗВЕЗДАМИ */
+        .rating-box { margin-top: 20px; padding: 15px; background: #252525; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; }
+        .interactive-stars span { font-size: 26px; cursor: pointer; color: #444; transition: color 0.2s; }
+
+        /* СТИЛИ ДЛЯ КОММЕНТАРИЕВ */
+        .comments-section { margin-top: 30px; background-color: #1e1e1e; padding: 25px; border-radius: 8px; }
+        .comments-section h3 { margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 12px; font-size: 20px; }
+        .comment-form { display: none; flex-direction: column; gap: 12px; margin-bottom: 25px; }
+        .comment-textarea { width: 100%; min-height: 80px; background-color: #141414; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 6px; font-family: inherit; font-size: 14px; resize: vertical; box-sizing: border-box; outline: none; transition: border-color 0.2s; }
+        .comment-textarea:focus { border-color: #e50914; }
+        .btn-send-comment { align-self: flex-end; background-color: #e50914; color: #fff; border: none; padding: 10px 24px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-send-comment:hover { background-color: #f40612; }
+        .login-to-comment { color: #888; background-color: #161616; padding: 15px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; }
+        .comment-item { background-color: #161616; padding: 15px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #e50914; }
+        .comment-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+        .comment-author { font-weight: bold; color: #f3ce13; font-size: 14px; }
+        .comment-date { color: #666; }
+        .comment-text { color: #ddd; font-size: 14px; line-height: 1.5; margin: 0; white-space: pre-wrap; }
+    </style>
+</head>
+<body class="auth-body">
+
+<div class="header">
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+    <div class="nav-menu">
+        <a href="/?category=Фильм">Фильмы</a>
+        <a href="/?category=Сериал">Сериалы</a>
+        <a href="/bookmarks">Мои закладки</a>
+    </div>
+
+    <div class="search-container" style="flex: 0 1 320px; margin: 0 20px;">
+        <input type="text" id="movieSearchInput" placeholder="Поиск фильмов и сериалов..."
+               style="width: 100%; padding: 8px 15px; border-radius: 20px; border: 1px solid #333; background-color: #1a1a1a; color: #fff; outline: none; font-size: 14px; transition: border-color 0.3s;"
+               onfocus="this.style.borderColor='#e50914'"
+               onblur="this.style.borderColor='#333'">
+    </div>
+
+    <div class="auth-buttons" id="authSection" style="display: flex; gap: 10px;">
+        <a href="/login" class="btn-login">Войти</a>
+        <a href="/register" class="btn-login" style="background-color: #333;">Новый аккаунт</a>
+    </div>
+</div>
+
+<div class="main-content">
+    <div class="movie-details-card">
+        <img th:src="${video.posterUrl}" alt="Постер" class="movie-poster">
+        <div class="movie-info">
+            <h1 th:text="${video.title} + ' (' +${video.releaseYear} + ')'">Название</h1>
+            <ul class="info-list">
+                <li><span class="label">Год выпуска:</span> <span class="value" th:text="${video.releaseYear}">Год</span></li>
+                <li><span class="label">Страна:</span> <span class="value" th:text="${video.country}">Страна</span></li>
+                <li><span class="label">Категория:</span> <span class="value" th:text="${video.category.name}">Категория</span></li>
+                <li><span class="label">Лучшее качество:</span> <span class="value" style="color: #f3ce13; font-weight: bold;">Full HD 1080p</span></li>
+            </ul>
+
+            <div class="rating-box">
+                <div>
+                    <div style="font-size: 15px; color: #ccc; margin-bottom: 5px;">
+                        Рейтинг: <strong id="avgRatingValue" style="color: #ffc107; font-size: 18px;">0.0</strong> / 5
+                        <span style="font-size: 13px; color: #888;">(<span id="totalVotesCount">0</span> оценок)</span>
+                    </div>
+
+                    <!-- Интерактивные звёзды слева (и для отображения, и для голосования) -->
+                    <div class="interactive-stars" id="interactiveStars" style="cursor: pointer; display: inline-flex; gap: 3px;">
+                        <span data-value="1">★</span>
+                        <span data-value="2">★</span>
+                        <span data-value="3">★</span>
+                        <span data-value="4">★</span>
+                        <span data-value="5">★</span>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 25px; border-bottom: 1px solid #333; padding-bottom: 10px;">Описание</h3>
+            <p class="desc" th:text="${video.description}" style="font-size: 15px; color: #bbb; line-height: 1.6;">Описание</p>
+
+            <button id="bookmarkBtn" class="bookmark-btn" th:data-video-id="${video.id}" onclick="addBookmark(this)">
+                + Добавить в закладки
+            </button>
+        </div>
+    </div>
+
+    <div class="player-section">
+        <div class="player-tabs">
+            <div class="player-tab active" id="tabOnline" onclick="switchTab('online')">Смотреть онлайн</div>
+            <div class="player-tab" id="tabTrailer" th:data-trailer="${video.trailerUrl}" onclick="switchTab('trailer', this)">Трейлер</div>
+        </div>
+
+        <div class="video-container">
+            <div class="quality-overlay" id="qualityOverlay">
+                <h3 style="margin-bottom: 20px;">Выберите качество</h3>
+                <div class="quality-buttons">
+                    <button class="btn-quality" th:data-video-id="${video.id}" onclick="attemptPlay(this, 480, true)">480p (Бесплатно)</button>
+                    <button class="btn-quality" th:data-video-id="${video.id}" onclick="attemptPlay(this, 720, true)">720p (HD)</button>
+                    <button class="btn-quality" th:data-video-id="${video.id}" onclick="attemptPlay(this, 1080, true)">1080p (Full HD)</button>
+                </div>
+                <div id="playerMessage" style="margin-top: 15px; font-weight: bold;"></div>
+            </div>
+
+            <div class="in-player-controls" id="inPlayerControls">
+                <button class="btn-small-quality" th:data-video-id="${video.id}" onclick="attemptPlay(this, 480, false)">480p</button>
+                <button class="btn-small-quality" th:data-video-id="${video.id}" onclick="attemptPlay(this, 720, false)">720p</button>
+                <button class="btn-small-quality" th:data-video-id="${video.id}" onclick="attemptPlay(this, 1080, false)">1080p</button>
+            </div>
+
+            <video id="mainVideoPlayer" controls poster="https://via.placeholder.com/1280x720/000000/ffffff"></video>
+        </div>
+    </div>
+
+    <!-- СЕКЦИЯ КОММЕНТАРИЕВ (теперь внутри main-content) -->
+    <div class="comments-section">
+        <h3>Комментарии (<span id="commentsCount">0</span>)</h3>
+
+        <!-- Форма отправки (видна только авторизованным) -->
+        <div class="comment-form" id="commentFormBlock">
+            <textarea id="commentInput" class="comment-textarea" placeholder="Напишите своё мнение о фильме..."></textarea>
+            <button class="btn-send-comment" onclick="submitComment()">Отправить</button>
+        </div>
+
+        <!-- Плашка для гостей (видна тем, кто не вошел) -->
+        <div class="login-to-comment" id="loginToCommentMsg">
+            Чтобы оставить комментарий, пожалуйста, <a href="/login" style="color: #e50914; font-weight: bold; text-decoration: none;">войдите в аккаунт</a>.
+        </div>
+
+        <!-- Список всех комментариев -->
+        <div id="commentsList">
+            <p style="color: #777;">Загрузка комментариев...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    const videoId = [[${video.id}]];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const email = localStorage.getItem('userEmail');
+        loadRating();
+        loadComments();
+
+        if (email) {
+            const authSection = document.getElementById('authSection');
+            if (authSection) {
+                authSection.innerHTML = `
+                    <a href="/profile" id="headerUsername" style="color: #ccc; margin-right: 15px; font-weight: bold; text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='#e50914'" onmouseout="this.style.color='#ccc'">${email}</a>
+                    <a href="#" onclick="logout()" class="btn-login" style="background-color: #333;">Выйти</a>
+                `;
+
+                fetch(`/api/profile?email=${encodeURIComponent(email)}`)
+                    .then(response => {
+                        if (response.ok) return response.json();
+                    })
+                    .then(data => {
+                        if (data && data.username) {
+                            document.getElementById('headerUsername').textContent = data.username;
+                        }
+                    })
+                    .catch(err => console.error("Ошибка загрузки профиля:", err));
+            }
+
+            const bookmarkBtn = document.getElementById('bookmarkBtn');
+            if (bookmarkBtn) bookmarkBtn.style.display = 'inline-block';
+
+            // Показываем форму комментариев для вошедшего пользователя и прячем плашку для гостей
+            document.getElementById('commentFormBlock').style.display = 'flex';
+            document.getElementById('loginToCommentMsg').style.display = 'none';
+        }
+    });
+
+    // Загрузка среднего рейтинга
+    async function loadRating() {
+        try {
+            const res = await fetch(`/api/ratings/average?videoId=${videoId}`, { cache: 'no-store' });
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('avgRatingValue').textContent = data.averageRating;
+                document.getElementById('totalVotesCount').textContent = data.totalVotes;
+
+                const avgScore = Math.round(data.averageRating);
+                const stars = document.querySelectorAll('#interactiveStars span');
+                stars.forEach((s, i) => {
+                    s.style.color = (i < avgScore) ? '#ffc107' : '#444';
+                });
+            }
+        } catch (e) {
+            console.error("Ошибка загрузки рейтинга", e);
+        }
+    }
+
+    // Интерактив наведения и клика по левым звёздам
+    const stars = document.querySelectorAll('#interactiveStars span');
+    stars.forEach((star, index) => {
+        star.addEventListener('mouseover', () => {
+            stars.forEach((s, i) => {
+                s.style.color = (i <= index) ? '#ffc107' : '#444';
+            });
+        });
+
+        star.addEventListener('mouseout', () => {
+            loadRating();
+        });
+
+        star.addEventListener('click', async () => {
+            const email = localStorage.getItem('userEmail');
+            if (!email) {
+                alert("Пожалуйста, войдите в аккаунт, чтобы ставить оценки.");
+                return;
+            }
+
+            const score = star.getAttribute('data-value');
+
+            try {
+                const response = await fetch(`/api/ratings/rate?email=${encodeURIComponent(email)}&videoId=${videoId}&score=${score}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    alert("Спасибо за вашу оценку!");
+                    loadRating();
+                } else {
+                    alert("Ошибка при отправке оценки");
+                }
+            } catch (err) {
+                console.error("Сбой сети", err);
+            }
+        });
+    });
+
+    function logout() {
+        localStorage.removeItem('userEmail');
+        window.location.reload();
+    }
+
+    async function addBookmark(btnElement) {
+        const email = localStorage.getItem('userEmail');
+        if (!email) return alert("Пожалуйста, войдите в аккаунт.");
+
+        try {
+            const response = await fetch(`/api/bookmarks/add?email=${encodeURIComponent(email)}&videoId=${videoId}`, { method: 'POST' });
+            if (response.ok) {
+                btnElement.textContent = '✓ В закладках';
+                btnElement.style.backgroundColor = '#4caf50';
+            } else {
+                alert(`Ошибка сервера: ${await response.text()}`);
+            }
+        } catch (err) {
+            alert("Сбой сети.");
+        }
+    }
+
+    let currentQuality = null;
+
+    async function attemptPlay(btnElement, quality, isInitial) {
+        if (!isInitial && currentQuality === quality) return;
+
+        const email = localStorage.getItem('userEmail') || '';
+        const messageBox = document.getElementById('playerMessage');
+        const videoPlayer = document.getElementById('mainVideoPlayer');
+
+        try {
+            const response = await fetch(`/api/videos/${videoId}/play?quality=${quality}&email=${encodeURIComponent(email)}`);
+            const videoUrl = await response.text();
+
+            if (response.ok) {
+                let savedTime = 0;
+                let wasPlaying = false;
+
+                if (!isInitial) {
+                    savedTime = videoPlayer.currentTime;
+                    wasPlaying = !videoPlayer.paused;
+                }
+
+                document.getElementById('qualityOverlay').style.display = 'none';
+                document.getElementById('inPlayerControls').style.display = 'flex';
+
+                videoPlayer.src = videoUrl;
+                videoPlayer.load();
+
+                if (!isInitial) {
+                    videoPlayer.currentTime = savedTime;
+                }
+
+                if (isInitial || wasPlaying) {
+                    videoPlayer.play();
+                }
+
+                currentQuality = quality;
+                document.querySelectorAll('.btn-small-quality').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.textContent.trim() === quality + 'p') {
+                        btn.classList.add('active');
+                    }
+                });
+
+            } else {
+                if (isInitial) {
+                    messageBox.style.color = '#ff4d4d';
+                    messageBox.textContent = `Ошибка: ${videoUrl}`;
+                } else {
+                    alert(`Ошибка доступа: ${videoUrl}`);
+                }
+            }
+        } catch (err) {
+            alert('Ошибка соединения с сервером');
+        }
+    }
+
+    function switchTab(tab, element) {
+        const videoPlayer = document.getElementById('mainVideoPlayer');
+        const qualityOverlay = document.getElementById('qualityOverlay');
+        const inPlayerControls = document.getElementById('inPlayerControls');
+
+        document.getElementById('tabOnline').classList.remove('active');
+        document.getElementById('tabTrailer').classList.remove('active');
+
+        if (tab === 'online') {
+            document.getElementById('tabOnline').classList.add('active');
+            videoPlayer.pause();
+            qualityOverlay.style.display = 'flex';
+            inPlayerControls.style.display = 'none';
+        } else if (tab === 'trailer') {
+            element.classList.add('active');
+            qualityOverlay.style.display = 'none';
+            inPlayerControls.style.display = 'none';
+
+            const trailerUrl = element.getAttribute('data-trailer');
+            if (trailerUrl && trailerUrl !== 'null' && trailerUrl !== '') {
+                videoPlayer.src = trailerUrl;
+                videoPlayer.load();
+                videoPlayer.play();
+            } else {
+                alert('Трейлер для этого фильма еще не загружен.');
+            }
+        }
+    } // <-- Вот этой скобки не хватало!
+
+    // Загрузка комментариев (для всех пользователей)
+    async function loadComments() {
+        const list = document.getElementById('commentsList');
+        const countSpan = document.getElementById('commentsCount');
+        try {
+            const res = await fetch(`/api/comments?videoId=${videoId}`, { cache: 'no-store' });
+            if (res.ok) {
+                const comments = await res.json();
+                countSpan.textContent = comments.length;
+
+                if (comments.length === 0) {
+                    list.innerHTML = '<p style="color: #666;">Пока нет ни одного комментария. Будьте первым!</p>';
+                    return;
+                }
+
+                list.innerHTML = '';
+                comments.forEach(c => {
+                    const item = document.createElement('div');
+                    item.className = 'comment-item';
+
+                    const header = document.createElement('div');
+                    header.className = 'comment-header';
+
+                    const author = document.createElement('span');
+                    author.className = 'comment-author';
+                    author.textContent = c.author;
+
+                    const date = document.createElement('span');
+                    date.className = 'comment-date';
+                    date.textContent = c.createdAt;
+
+                    header.appendChild(author);
+                    header.appendChild(date);
+
+                    const text = document.createElement('p');
+                    text.className = 'comment-text';
+                    text.textContent = c.text;
+
+                    item.appendChild(header);
+                    item.appendChild(text);
+                    list.appendChild(item);
+                });
+            }
+        } catch (err) {
+            console.error("Ошибка загрузки комментариев", err);
+            list.innerHTML = '<p style="color: #ff4d4d;">Не удалось загрузить комментарии.</p>';
+        }
+    }
+
+    // Отправка нового комментария
+    async function submitComment() {
+        const email = localStorage.getItem('userEmail');
+        const input = document.getElementById('commentInput');
+        const text = input.value.trim();
+
+        if (!email) {
+            alert("Пожалуйста, войдите в аккаунт!");
+            return;
+        }
+        if (!text) {
+            alert("Напишите текст комментария!");
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/comments/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    videoId: String(videoId),
+                    text: text
+                })
+            });
+
+            if (response.ok) {
+                input.value = '';
+                loadComments();
+            } else {
+                const err = await response.text();
+                alert("Ошибка: " + err);
+            }
+        } catch (err) {
+            alert("Сбой соединения с сервером");
+        }
+    }
+</script>
+</body>
+</html>

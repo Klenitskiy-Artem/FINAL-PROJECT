@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мои закладки - KinoStream</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* Стили для эффекта перетаскивания */
+        .video-card.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+            border: 2px dashed #e50914;
+        }
+        .video-card.over {
+            border-top: 4px solid #e50914;
+        }
+    </style>
+</head>
+<body class="auth-body">
+
+<div class="header">
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+
+    <div class="nav-menu">
+        <a href="/?category=Фильм">Фильмы</a>
+        <a href="/?category=Сериал">Сериалы</a>
+        <a href="/bookmarks">Мои закладки</a>
+    </div>
+
+    <!-- ПОЛЕ ПОИСКА ПО ЗАКЛАДКАМ -->
+    <div class="search-container" style="flex: 0 1 320px; margin: 0 20px;">
+        <input type="text" id="bookmarkSearchInput" placeholder="Поиск в закладках..."
+               style="width: 100%; padding: 8px 15px; border-radius: 20px; border: 1px solid #333; background-color: #1a1a1a; color: #fff; outline: none; font-size: 14px; transition: border-color 0.3s;"
+               onfocus="this.style.borderColor='#e50914'"
+               onblur="this.style.borderColor='#333'">
+    </div>
+
+    <div class="auth-buttons" id="authSection">
+        <a href="/login" class="btn-login">Войти</a>
+    </div>
+</div>
+
+<div class="main-content">
+    <h2>Мои закладки (переместите фильм, чтобы изменить порядок)</h2>
+    <div class="video-grid" id="bookmarksGrid">
+        <p id="loadingMsg" style="color: #888;">Загрузка закладок...</p>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const email = localStorage.getItem('userEmail');
+        const grid = document.getElementById('bookmarksGrid');
+
+        if (!email) {
+            grid.innerHTML = '<p style="color: #ff4d4d;">Пожалуйста, <a href="/login" style="color: #e50914;">войдите в аккаунт</a>.</p>';
+            return;
+        }
+
+        const authSection = document.getElementById('authSection');
+        if (authSection) {
+            authSection.innerHTML = `
+                <a href="/profile" id="headerUsername" style="color: #ccc; margin-right: 15px; font-weight: bold; text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='#e50914'" onmouseout="this.style.color='#ccc'">${email}</a>
+                <a href="#" onclick="logout()" class="btn-login" style="background-color: #333;">Выйти</a>
+            `;
+
+            fetch(`/api/profile?email=${encodeURIComponent(email)}`)
+                .then(response => {
+                    if (response.ok) return response.json();
+                })
+                .then(data => {
+                    if (data && data.username) {
+                        document.getElementById('headerUsername').textContent = data.username;
+                    }
+                })
+                .catch(err => console.error("Ошибка загрузки профиля:", err));
+        }
+
+        // Логика живого поиска по закладкам
+        const searchInput = document.getElementById('bookmarkSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase().trim();
+                const cards = grid.querySelectorAll('.video-card');
+                let visibleCount = 0;
+
+                cards.forEach(card => {
+                    const titleElement = card.querySelector('h3');
+                    const title = titleElement ? titleElement.textContent.toLowerCase() : '';
+
+                    if (title.includes(query)) {
+                        card.style.display = '';
+                        visibleCount++;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                let noResultsMsg = document.getElementById('noBookmarkSearchResults');
+                if (visibleCount === 0 && cards.length > 0 && query !== '') {
+                    if (!noResultsMsg) {
+                        noResultsMsg = document.createElement('p');
+                        noResultsMsg.id = 'noBookmarkSearchResults';
+                        noResultsMsg.style.color = '#888';
+                        noResultsMsg.style.gridColumn = '1 / -1';
+                        grid.appendChild(noResultsMsg);
+                    }
+                    noResultsMsg.textContent = `В закладках по запросу «${this.value}» ничего не найдено.`;
+                    noResultsMsg.style.display = 'block';
+                } else if (noResultsMsg) {
+                    noResultsMsg.style.display = 'none';
+                }
+            });
+        }
+
+        try {
+            const response = await fetch(`/api/bookmarks?email=${encodeURIComponent(email)}`);
+            if (response.ok) {
+                const bookmarks = await response.json();
+
+                if (bookmarks.length === 0) {
+                    grid.innerHTML = '<p style="color: #ccc;">У вас пока нет сохраненных фильмов.</p>';
+                    return;
+                }
+
+                grid.innerHTML = '';
+                bookmarks.forEach(bookmark => {
+                    const video = bookmark.video;
+
+                    const card = document.createElement('div');
+                    card.className = 'video-card';
+                    card.style.cursor = 'pointer';
+                    card.draggable = true;
+                    card.dataset.bookmarkId = bookmark.id;
+
+                    card.addEventListener('click', () => {
+                        window.location.href = `/video/${video.id}`;
+                    });
+
+                    card.innerHTML = `
+                        <img src="${video.posterUrl}" alt="Постер" style="width: 100%; height: 320px; object-fit: cover; border-radius: 6px 6px 0 0;">
+                        <div class="video-info">
+                            <h3>${video.title}</h3>
+                            <p class="meta">${video.releaseYear} • ${video.category.name}</p>
+                        </div>
+                    `;
+
+                    addDragAndDropHandlers(card);
+                    grid.appendChild(card);
+                });
+            } else {
+                grid.innerHTML = '<p style="color: #ff4d4d;">Ошибка загрузки закладок.</p>';
+            }
+        } catch (err) {
+            grid.innerHTML = '<p style="color: #ff4d4d;">Ошибка соединения с сервером.</p>';
+        }
+    });
+
+    let dragSrcEl = null;
+
+    function addDragAndDropHandlers(card) {
+        card.addEventListener('dragstart', function(e) {
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            this.classList.add('dragging');
+        });
+
+        card.addEventListener('dragover', function(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        });
+
+        card.addEventListener('dragenter', function(e) {
+            this.classList.add('over');
+        });
+
+        card.addEventListener('dragleave', function(e) {
+            this.classList.remove('over');
+        });
+
+        card.addEventListener('drop', function(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+
+            if (dragSrcEl !== this) {
+                const parent = this.parentNode;
+                const cardsArray = Array.from(parent.children);
+                const srcIndex = cardsArray.indexOf(dragSrcEl);
+                const targetIndex = cardsArray.indexOf(this);
+
+                if (srcIndex < targetIndex) {
+                    parent.insertBefore(dragSrcEl, this.nextSibling);
+                } else {
+                    parent.insertBefore(dragSrcEl, this);
+                }
+
+                saveNewOrder();
+            }
+            return false;
+        });
+
+        card.addEventListener('dragend', function(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.video-card').forEach(c => c.classList.remove('over'));
+        });
+    }
+
+    async function saveNewOrder() {
+        const email = localStorage.getItem('userEmail');
+        const cards = document.querySelectorAll('.video-card');
+        const orderedIds = Array.from(cards).map(card => Number(card.dataset.bookmarkId));
+
+        try {
+            await fetch(`/api/bookmarks/reorder?email=${encodeURIComponent(email)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderedIds)
+            });
+            console.log("Новый порядок успешно сохранен!");
+        } catch (err) {
+            console.error("Не удалось сохранить порядок на сервере", err);
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('userEmail');
+        window.location.href = '/';
+    }
+</script>
+</body>
+</html>

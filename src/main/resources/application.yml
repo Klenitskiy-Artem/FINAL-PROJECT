@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: kinostream
+  profiles:
+    active: dev # Сейчас мы работаем в режиме разработки (H2)
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  # Настройки для H2 (БД в памяти)
+  datasource:
+    url: jdbc:h2:file:./data/kinostreamdb;AUTO_SERVER=TRUE
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: validate # Мы будем использовать Flyway, поэтому Hibernate не должен сам создавать таблицы
+    show-sql: true # Будем видеть SQL-запросы в консоли
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  # Настройки для PostgreSQL (потом привяжем к Docker)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/kinostream
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

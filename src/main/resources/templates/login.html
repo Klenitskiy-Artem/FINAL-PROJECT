@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>KinoStream - Вход</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="auth-body">
+<div class="header">
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+    <div class="auth-buttons">
+        <a href="/register" class="btn-login" style="background-color: #333;">Новый аккаунт</a>
+    </div>
+</div>
+
+<div class="auth-container" style="align-items: center;">
+    <div class="auth-box">
+        <h2>Вход</h2>
+        <form id="loginForm">
+            <input type="email" id="loginEmail" placeholder="Email" required class="auth-input">
+            <input type="password" id="loginPassword" placeholder="Пароль" required class="auth-input">
+            <button type="submit" class="btn-submit">Войти</button>
+        </form>
+        <div style="text-align: center; margin-top: 15px;">
+            <a href="/register" style="color: #b3b3b3; text-decoration: none; font-size: 14px;">Нет аккаунта? Зарегистрироваться</a>
+        </div>
+        <div id="messageBox" class="message-box" style="position: relative; bottom: 0; margin-top: 15px;"></div>
+    </div>
+</div>
+
+<script>
+    function showMessage(text, isError = false) {
+        const msgBox = document.getElementById('messageBox');
+        msgBox.textContent = text;
+        msgBox.style.color = isError ? '#ff4d4d' : '#4caf50';
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            if (response.ok) {
+                localStorage.setItem('userEmail', email);
+                window.location.href = '/';
+            } else {
+                const errorText = await response.text();
+                showMessage(errorText, true);
+            }
+        } catch (err) {
+            showMessage('Ошибка соединения с сервером', true);
+        }
+    });
+</script>
+</body>
+</html>

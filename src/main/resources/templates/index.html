@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>KinoStream - Главная</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<header class="header">
+    <!-- Логотип теперь ссылка: всегда возвращает на главную с Новинками -->
+    <a href="/" class="logo" style="text-decoration: none;">KinoStream</a>
+
+    <nav class="nav-menu">
+        <a href="/?category=Фильм"
+           th:style="${currentCategory == 'Фильм'} ? 'color: #ffffff; font-weight: bold; border-bottom: 2px solid #e50914; padding-bottom: 5px;' : ''">
+            Фильмы
+        </a>
+        <a href="/?category=Сериал"
+           th:style="${currentCategory == 'Сериал'} ? 'color: #ffffff; font-weight: bold; border-bottom: 2px solid #e50914; padding-bottom: 5px;' : ''">
+            Сериалы
+        </a>
+        <a href="/bookmarks">Мои закладки</a>
+    </nav>
+
+    <div class="search-container" style="flex: 0 1 320px; margin: 0 20px;">
+        <input type="text" id="movieSearchInput" placeholder="Поиск фильмов и сериалов..."
+               style="width: 100%; padding: 8px 15px; border-radius: 20px; border: 1px solid #333; background-color: #1a1a1a; color: #fff; outline: none; font-size: 14px; transition: border-color 0.3s;"
+               onfocus="this.style.borderColor='#e50914'"
+               onblur="this.style.borderColor='#333'">
+    </div>
+
+    <div class="auth-buttons" id="authSection">
+        <a href="/login" class="btn-login">Войти</a>
+        <a href="/register" class="btn-login" style="background-color: #333; margin-left: 10px;">Новый аккаунт</a>
+    </div>
+</header>
+
+<main class="main-content">
+    <!-- Динамический заголовок: "Новинки", "Фильмы" или "Сериалы" -->
+    <h2 th:text="${pageTitle != null ? pageTitle : 'Новинки'}">Новинки</h2>
+
+    <div class="video-grid">
+        <div class="video-card" th:each="video : ${videos}"
+             th:onclick="'window.location.href=\'/video/' + ${video.id} + '\''"
+             style="cursor: pointer;">
+            <img th:src="${video.posterUrl}" alt="Постер" style="width: 100%; height: 320px; object-fit: cover; border-radius: 6px 6px 0 0;">
+            <div class="video-info">
+                <h3 th:text="${video.title}">Название</h3>
+                <p class="meta">
+                    <span th:text="${video.releaseYear}">Год</span> •
+                    <span th:text="${video.category.name}">Категория</span>
+                </p>
+                <p class="desc" th:text="${video.description}">Описание</p>
+
+                <!-- Рейтинг фильма -->
+                <p class="rating-badge" th:attr="data-video-id=${video.id}" style="color: #ffc107; font-size: 14px; font-weight: bold; margin: 10px 0 0 0;">
+                    ★ 0.0
+                </p>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const email = localStorage.getItem('userEmail');
+
+        if (email) {
+            const authSection = document.getElementById('authSection');
+            if (authSection) {
+                authSection.innerHTML = `
+                    <a href="/profile" id="headerUsername" style="color: #ccc; margin-right: 15px; font-weight: bold; text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='#e50914'" onmouseout="this.style.color='#ccc'">${email}</a>
+                    <a href="#" onclick="logout()" class="btn-login" style="background-color: #333;">Выйти</a>
+                `;
+
+                fetch(`/api/profile?email=${encodeURIComponent(email)}`)
+                    .then(response => {
+                        if (response.ok) return response.json();
+                    })
+                    .then(data => {
+                        if (data && data.username) {
+                            document.getElementById('headerUsername').textContent = data.username;
+                        }
+                    })
+                    .catch(err => console.error("Ошибка загрузки профиля:", err));
+            }
+        }
+
+        // Подгружаем рейтинг для каждой карточки
+        loadAllCardRatings();
+    });
+
+    window.addEventListener('pageshow', () => {
+        loadAllCardRatings();
+    });
+
+    function loadAllCardRatings() {
+        document.querySelectorAll('.video-card').forEach(card => {
+            const badge = card.querySelector('.rating-badge');
+            if (!badge) return;
+
+            let videoId = badge.getAttribute('data-video-id');
+            if (!videoId) {
+                const onclickAttr = card.getAttribute('onclick');
+                if (onclickAttr) {
+                    const match = onclickAttr.match(/\/video\/(\d+)/);
+                    if (match) videoId = match[1];
+                }
+            }
+
+            if (videoId) {
+                fetchRatingForCard(videoId, badge);
+            }
+        });
+    }
+
+    async function fetchRatingForCard(videoId, badgeElement) {
+        try {
+            const response = await fetch(`/api/ratings/average?videoId=${videoId}`, {
+                cache: 'no-store'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const formattedRating = Number(data.averageRating).toFixed(1);
+                badgeElement.textContent = `★ ${formattedRating}`;
+            }
+        } catch (err) {
+            console.error("Ошибка загрузки рейтинга для видео " + videoId, err);
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('userEmail');
+        window.location.reload();
+    }
+
+    // Живой поиск работает и внутри выбранной категории!
+    const searchInput = document.getElementById('movieSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.video-card, .movie-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const titleElement = card.querySelector('h3');
+                const title = titleElement ? titleElement.textContent.toLowerCase() : '';
+
+                if (title.includes(query)) {
+                    card.style.display = '';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            let noResultsMsg = document.getElementById('noSearchResults');
+            if (visibleCount === 0 && query !== '') {
+                if (!noResultsMsg) {
+                    noResultsMsg = document.createElement('p');
+                    noResultsMsg.id = 'noSearchResults';
+                    noResultsMsg.style.color = '#888';
+                    noResultsMsg.style.marginTop = '20px';
+                    const grid = document.querySelector('.video-grid') || document.querySelector('.main-content');
+                    if (grid) grid.appendChild(noResultsMsg);
+                }
+                noResultsMsg.textContent = `По запросу «${this.value}» ничего не найдено.`;
+                noResultsMsg.style.display = 'block';
+            } else if (noResultsMsg) {
+                noResultsMsg.style.display = 'none';
+            }
+        });
+    }
+</script>
+</body>
+</html>
