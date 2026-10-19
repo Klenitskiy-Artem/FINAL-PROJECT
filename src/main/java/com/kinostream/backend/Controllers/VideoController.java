@@ -58,33 +58,54 @@ public class VideoController {
                                        @RequestParam int quality,
                                        @RequestParam(required = false) String email) {
 
-        // 1. ПРОВЕРКА ПРАВ ДОСТУПА
-        // Если просят качество выше 480 (то есть 720 или 1080), но email пустой (пользователь не вошел)
-        if (quality > 480 && (email == null || email.isEmpty())) {
-            // Возвращаем статус 403 (Forbidden) и текст ошибки
-            return ResponseEntity.status(403).body("Качество 720p и 1080p доступно только зарегистрированным пользователям.");
+        // 1. Качество 480p доступно абсолютно всем (даже гостям)
+        if (quality == 480) {
+            Video video = videoRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Видео не найдено"));
+            if (video.getVideoUrl480() == null || video.getVideoUrl480().isEmpty()) {
+                return ResponseEntity.status(404).body("Видео в качестве 480p еще не загружено.");
+            }
+            return ResponseEntity.ok(video.getVideoUrl480());
         }
 
-        // 2. ИЩЕМ ФИЛЬМ В БАЗЕ
-        com.kinostream.backend.Models.Video video = videoRepository.findById(id)
+        // 2. Для качества выше 480p (720 или 1080) проверяем наличие email
+        if (email == null || email.trim().isEmpty()) {
+            return ResponseEntity.status(403).body("Качество 720p и 1080p доступно только по подписке.");
+        }
+
+        // 3. Ищем пользователя в базе
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(403).body("Пользователь не найден.");
+        }
+
+        // 4. ПРОВЕРЯЕМ АКТИВНОСТЬ ТРИАЛА ИЛИ ПОДПИСКИ
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        boolean hasActiveTrial = user.getTrialEndDate() != null && user.getTrialEndDate().isAfter(now);
+        boolean hasActiveSub = user.getSubscriptionEndDate() != null && user.getSubscriptionEndDate().isAfter(now);
+
+        if (!hasActiveTrial && !hasActiveSub) {
+            return ResponseEntity.status(403).body("Срок действия подписки истек. Для просмотра в HD оформите подписку.");
+        }
+
+        // 5. ИЩЕМ ФИЛЬМ В БАЗЕ
+        Video video = videoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Видео не найдено"));
 
-        // 3. ВЫБИРАЕМ НУЖНУЮ ССЫЛКУ ИЗ БАЗЫ
+        // 6. ВЫБИРАЕМ ССЫЛКУ ПО КАЧЕСТВУ
         String videoUrl = "";
-        if (quality == 480) {
-            videoUrl = video.getVideoUrl480();
-        } else if (quality == 720) {
+        if (quality == 720) {
             videoUrl = video.getVideoUrl720();
         } else if (quality == 1080) {
             videoUrl = video.getVideoUrl1080();
         }
 
-        // 4. ПРОВЕРЯЕМ, ЗАГРУЖЕН ЛИ ФАЙЛ
+        // 7. ПРОВЕРЯЕМ, ЗАГРУЖЕН ЛИ ФАЙЛ
         if (videoUrl == null || videoUrl.isEmpty()) {
             return ResponseEntity.status(404).body("Извините, видео в качестве " + quality + "p еще не загружено.");
         }
 
-        // 5. УСПЕХ!
+        // 8. УСПЕХ!
         return ResponseEntity.ok(videoUrl);
     }
     @GetMapping("/api/videos/search")

@@ -30,7 +30,7 @@
             box-sizing: border-box;
         }
 
-        /* Правая карточка: компактный кликабельный блок подписки */
+        /* Правая карточка: блок подписки */
         .subscription-side-card {
             width: 340px;
             flex-shrink: 0;
@@ -40,21 +40,101 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             border: 1px solid #2e2e2e;
             box-sizing: border-box;
-            cursor: pointer;
-            transition: transform 0.2s, border-color 0.2s;
+            transition: border-color 0.2s;
         }
 
         .subscription-side-card:hover {
-            transform: translateY(-3px);
-            border-color: #e50914;
+            border-color: #444;
         }
 
         .form-group { margin-bottom: 20px; }
         .form-group label { display: block; margin-bottom: 8px; color: #ccc; font-size: 14px; }
         .form-group input { width: 100%; padding: 10px 12px; border-radius: 4px; border: 1px solid #333; background: #222; color: white; box-sizing: border-box; }
         .form-group input:focus { outline: none; border-color: #e50914; }
+
         .btn-save { background-color: #e50914; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px; transition: 0.2s; }
         .btn-save:hover { background-color: #f6121d; }
+
+        /* Кнопка отмены подписки */
+        .btn-cancel-sub {
+            margin-top: 10px;
+            background-color: transparent;
+            color: #999;
+            border: 1px solid #444;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            font-size: 14px;
+            transition: 0.2s;
+            display: none; /* Показывается только если есть активная подписка */
+        }
+        .btn-cancel-sub:hover {
+            background-color: #2a2a2a;
+            color: #ff4d4d;
+            border-color: #ff4d4d;
+        }
+
+        /* Стили модального окна "Вы уверены?" */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-box {
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 25px 30px;
+            max-width: 360px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.8);
+        }
+        .modal-box h3 {
+            margin-top: 0;
+            font-size: 20px;
+            color: #fff;
+        }
+        .modal-box p {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+        .btn-confirm-yes {
+            flex: 1;
+            background-color: #e50914;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-confirm-yes:hover { background-color: #f6121d; }
+        .btn-confirm-no {
+            flex: 1;
+            background-color: #333;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-confirm-no:hover { background-color: #444; }
     </style>
 </head>
 <body class="auth-body">
@@ -100,8 +180,8 @@
         <p id="profileMessage" style="margin-top: 15px; font-weight: bold; text-align: center;"></p>
     </div>
 
-    <!-- ПРАВАЯ КОЛОНКА: Статус подписки и переход к покупке/продлению -->
-    <div class="subscription-side-card" onclick="window.location.href='/subscription'">
+    <!-- ПРАВАЯ КОЛОНКА: Статус подписки и управление -->
+    <div class="subscription-side-card">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 15px;">
             <h2 style="margin: 0; font-size: 20px;">Подписка</h2>
             <span id="subBadge" style="background-color: #333; color: #aaa; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">
@@ -113,9 +193,26 @@
             Проверяем статус...
         </p>
 
-        <button type="button" class="btn-save">
+        <button type="button" class="btn-save" onclick="window.location.href='/subscription'">
             Купить / Продлить подписку →
         </button>
+
+        <!-- Кнопка отмены подписки -->
+        <button type="button" id="cancelSubBtn" class="btn-cancel-sub" onclick="openCancelModal()">
+            Отменить подписку
+        </button>
+    </div>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ОТМЕНЫ -->
+<div class="modal-overlay" id="cancelModal">
+    <div class="modal-box">
+        <h3>Вы уверены?</h3>
+        <p>При отмене подписки вы сразу потеряете доступ к качеству 720p HD и 1080p Full HD.</p>
+        <div class="modal-actions">
+            <button type="button" class="btn-confirm-yes" onclick="confirmCancelSubscription()">Да</button>
+            <button type="button" class="btn-confirm-no" onclick="closeCancelModal()">Нет</button>
+        </div>
     </div>
 </div>
 
@@ -132,35 +229,83 @@
             <a href="#" onclick="logout()" class="btn-login" style="background-color: #333;">Выйти</a>
         `;
 
-        // Запрашиваем данные профиля и статус подписки
+        loadProfileData();
+    });
+
+    function loadProfileData() {
+        const email = localStorage.getItem('userEmail');
         fetch(`/api/profile?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
-            .then(res => res.json())
+            .then(res => {
+                if (res.status === 404) {
+                    localStorage.removeItem('userEmail');
+                    window.location.href = '/login';
+                    return null;
+                }
+                return res.json();
+            })
             .then(data => {
+                if (!data) return;
+
                 document.getElementById('profileEmail').value = data.email;
                 document.getElementById('profileUsername').value = data.username;
                 document.getElementById('headerUsername').textContent = data.username;
 
                 const subBadge = document.getElementById('subBadge');
                 const subDaysLeft = document.getElementById('subDaysLeft');
+                const cancelSubBtn = document.getElementById('cancelSubBtn');
 
                 if (data.subStatus === 'PREMIUM') {
                     subBadge.textContent = `PRO: осталось ${data.daysLeft} дн.`;
                     subBadge.style.backgroundColor = '#f3ce13';
                     subBadge.style.color = '#000';
-                    subDaysLeft.innerHTML = `Статус: <strong style="color: #f3ce13;">Активна (Full HD 1080p)</strong><br><span style="color: #888; font-size: 13px;">Нажмите, чтобы продлить подписку</span>`;
+                    subDaysLeft.innerHTML = `Статус: <strong style="color: #f3ce13;">Активна (Full HD 1080p)</strong>`;
+                    cancelSubBtn.style.display = 'block';
                 } else if (data.subStatus === 'TRIAL') {
                     subBadge.textContent = `TRIAL: осталось ${data.daysLeft} дн.`;
                     subBadge.style.backgroundColor = '#4caf50';
                     subBadge.style.color = '#fff';
-                    subDaysLeft.innerHTML = `Статус: <strong style="color: #4caf50;">Пробный период (3 дня)</strong><br><span style="color: #888; font-size: 13px;">Нажмите, чтобы купить полную подписку</span>`;
+                    subDaysLeft.innerHTML = `Статус: <strong style="color: #4caf50;">Пробный период (3 дня)</strong>`;
+                    cancelSubBtn.style.display = 'block';
                 } else {
                     subBadge.textContent = 'FREE (480p)';
                     subBadge.style.backgroundColor = '#333';
                     subBadge.style.color = '#aaa';
-                    subDaysLeft.innerHTML = `Статус: <strong style="color: #aaa;">Подписка не активна</strong><br><span style="color: #888; font-size: 13px;">Нажмите, чтобы выбрать тариф</span>`;
+                    subDaysLeft.innerHTML = `Статус: <strong style="color: #aaa;">Подписка не активна</strong>`;
+                    cancelSubBtn.style.display = 'none';
                 }
             });
-    });
+    }
+
+    // Открыть окно "Вы уверены?"
+    function openCancelModal() {
+        document.getElementById('cancelModal').style.display = 'flex';
+    }
+
+    // Нажали "Нет" — закрываем окно и остаемся в профиле
+    function closeCancelModal() {
+        document.getElementById('cancelModal').style.display = 'none';
+    }
+
+    // Нажали "Да" — отменяем подписку
+    async function confirmCancelSubscription() {
+        const email = localStorage.getItem('userEmail');
+        try {
+            const response = await fetch('/api/profile/cancel-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email })
+            });
+
+            if (response.ok) {
+                closeCancelModal();
+                loadProfileData(); // Мгновенно обновляем статус карточки на FREE (480p)
+            } else {
+                alert('Ошибка при отмене подписки');
+            }
+        } catch (err) {
+            alert('Сбой соединения с сервером');
+        }
+    }
 
     function logout() {
         localStorage.removeItem('userEmail');

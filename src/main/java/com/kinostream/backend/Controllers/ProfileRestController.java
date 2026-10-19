@@ -119,4 +119,21 @@ public class ProfileRestController {
 
         return ResponseEntity.ok("Подписка успешно оформлена!");
     }
+    @PostMapping("/cancel-subscription")
+    public ResponseEntity<?> cancelSubscription(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body("Пользователь не найден");
+        }
+
+        User user = userOpt.get();
+        // Сбрасываем даты окончания подписки и триала
+        user.setSubscriptionEndDate(null);
+        user.setTrialEndDate(null);
+        userRepository.save(user);
+
+        return ResponseEntity.ok("Подписка отменена");
+    }
 }
